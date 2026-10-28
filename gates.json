@@ -1,0 +1,4 @@
+{
+  "cascade(keywords→embed-knn@0.75)": {"min_macro_f1": 0.75, "max_oos_false_accept": 0.1, "max_ece": 0.2},
+  "keywords": {"min_macro_f1": 0.7}
+}

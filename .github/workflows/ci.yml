@@ -1,0 +1,22 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest
+      - name: benchmark + regression gate
+        run: python -m lab.cli --gate
+        # LLM arms join automatically when the repository secret LLM_API_KEY (and var LAB_LLM_MODEL) exist:
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LAB_LLM_MODEL: ${{ vars.LAB_LLM_MODEL }}
+      - uses: actions/upload-artifact@v4
+        with: { name: scorecard, path: reports/ }

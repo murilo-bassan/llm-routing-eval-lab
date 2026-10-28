@@ -1,0 +1,10 @@
+[project]
+name = "llm-routing-eval-lab"
+version = "0.1.0"
+description = "Benchmark intent routers honestly: macro-F1, OOS false-accepts, calibration, significance, cascades."
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Murilo Bassan" }]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
