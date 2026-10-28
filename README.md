@@ -10,7 +10,7 @@ confidence intervals, statistical significance and the cascade threshold.
 ![stats](https://img.shields.io/badge/McNemar%20%C2%B7%20bootstrap%20%C2%B7%20ECE-000?style=flat-square&labelColor=000&color=a58bff)
 ![tests](https://img.shields.io/badge/tests-14%20%2B%20CI%20gate-000?style=flat-square&labelColor=000&color=c6ff00)
 
-[English](#english) · [Português](#português)
+**English** · [Português](README.pt-BR.md)
 
 <img src="docs/screenshots/scorecard-top.png" alt="scorecard" width="100%">
 
@@ -18,16 +18,14 @@ confidence intervals, statistical significance and the cascade threshold.
 
 ---
 
-## English
-
-### The question
+## The question
 
 Every tool-using assistant routes first: *which tool does this request need — or none?*
 Teams usually pick between hand-written keywords, a small classifier and an LLM call by
 gut feeling. This lab makes it a measured decision, with the methodology a reviewer
 would ask for ([ADR 0001](docs/adr/0001-how-to-compare-routers.md)).
 
-### Arms
+## Arms
 
 | arm | how | cost |
 |---|---|---|
@@ -38,7 +36,7 @@ would ask for ([ADR 0001](docs/adr/0001-how-to-compare-routers.md)).
 | `cascade(a→b@τ)` | cheap arm answers when confident ≥ τ, otherwise escalates | mixed |
 | `llm:<model>` | any OpenAI-compatible model, JSON mode, few-shot, **disk-cached** | per token |
 
-### Results (offline arms, held-out templates — `python -m lab.cli`)
+## Results (offline arms, held-out templates — `python -m lab.cli`)
 
 | arm | accuracy [95% CI] | macro-F1 | OOS false-accept | ECE | escalated |
 |---|---|---|---|---|---|
@@ -61,45 +59,25 @@ What the scorecard says that a single accuracy number would not:
 > `LLM_API_KEY` is in your environment (or a CI secret); their responses are cached by
 > prompt hash so analyses are reproducible.
 
-### Methodology highlights
+## Methodology highlights
 - **Template-level split** — no paraphrase leakage into the test set.
 - **Out-of-scope as a class**, with false-accept rate reported separately.
 - **Exact McNemar test** vs the best arm; **bootstrap 95% CIs**; **ECE** calibration.
 - **Coverage/accuracy curves** — where to set τ for a cascade.
 - **Regression gate**: `gates.json` floors per arm; `python -m lab.cli --gate` exits 1 on a breach (CI).
-- Self-contained **HTML scorecard** (inline SVG, no JS) uploaded as a CI artifact.
+- Self-contained **HTML scorecard** (inline SVG, no JS), in English and Portuguese, uploaded as a CI artifact.
 
-### Quick start
+## Quick start
 
 ```bash
 git clone https://github.com/murilo-bassan/llm-routing-eval-lab.git && cd llm-routing-eval-lab
 pip install -r requirements-dev.txt
 python -m pytest
-python -m lab.cli --gate          # → reports/scorecard.html
+python -m lab.cli --gate          # → reports/scorecard.html and reports/scorecard.pt.html
 # with an LLM:  LLM_API_KEY=... LAB_LLM_MODEL=... LAB_PRICE_IN=... LAB_PRICE_OUT=... python -m lab.cli
 ```
 
 <img src="docs/screenshots/scorecard.png" alt="full scorecard" width="100%">
-
----
-
-## Português
-
-### A pergunta
-
-Todo assistente com ferramentas começa roteando: *qual tool esse pedido precisa — ou nenhuma?*
-Este laboratório transforma a escolha entre palavras-chave, classificador leve e chamada de LLM
-numa decisão medida.
-
-- **Split por template** (sem vazamento de paráfrases), **fora de escopo** como classe e taxa de
-  falso aceite reportada à parte, **macro-F1**, **IC 95% por bootstrap**, **teste exato de McNemar**,
-  **calibração (ECE)** e **curva cobertura × acurácia** para escolher o limiar da cascata.
-- Resultado honesto: a **cascata keywords → kNN** vence cada braço isolado (macro-F1 0,80) escalando só
-  um terço do tráfego — mas a vantagem sobre keywords **ainda não é estatisticamente significativa**,
-  e dois braços "razoáveis" em acurácia aceitam 85–100% dos pedidos fora de escopo.
-- O braço LLM roda só com a chave no ambiente, com cache por hash do prompt; **nenhum número de LLM
-  é escrito à mão** neste repositório.
-- **Portão de regressão** no CI (`gates.json`).
 
 ---
 
