@@ -22,6 +22,7 @@ def main(argv: list[str] | None = None) -> int:
     results = runner.run()
     args.html.parent.mkdir(parents=True, exist_ok=True)
     args.html.write_text(report.to_html(results), encoding="utf-8")
+    args.html.with_name(args.html.stem + ".pt.html").write_text(report.to_html(results, "pt"), encoding="utf-8")
     args.json.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
     print(report.to_markdown(results))
     print(f"\nscorecard → {args.html}")

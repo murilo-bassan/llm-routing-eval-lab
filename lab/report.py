@@ -18,7 +18,7 @@ th{font:500 10.5px ui-monospace,monospace;letter-spacing:.12em;text-transform:up
 """
 
 
-def _curve_svg(rows: list[dict[str, Any]]) -> str:
+def _curve_svg(rows: list[dict[str, Any]], tr=lambda s: s) -> str:
     W, H, P = 520, 300, 40
     x = lambda c: P + c * (W - 2 * P)                       # noqa: E731
     y = lambda a: H - P - (a - 0.5) / 0.5 * (H - 2 * P)    # accuracy axis from 0.5 to 1.0
@@ -28,7 +28,7 @@ def _curve_svg(rows: list[dict[str, Any]]) -> str:
                      f'<text x="{P - 6}" y="{y(t) + 4}" fill="#7a7a76" font-size="10" text-anchor="end" font-family="monospace">{t:.2f}</text>')
     for c in (0, 0.5, 1):
         parts.append(f'<text x="{x(c)}" y="{H - P + 16}" fill="#7a7a76" font-size="10" text-anchor="middle" font-family="monospace">{c:.0%}</text>')
-    parts.append(f'<text x="{W - P}" y="{H - 6}" fill="#7a7a76" font-size="10" text-anchor="end" font-family="monospace">coverage →</text>')
+    parts.append(f'<text x="{W - P}" y="{H - 6}" fill="#7a7a76" font-size="10" text-anchor="end" font-family="monospace">{tr("coverage →")}</text>')
     for i, row in enumerate(rows):
         pts = " ".join(f"{x(pt['coverage']):.1f},{y(max(0.5, pt['accuracy'])):.1f}" for pt in row["coverage_curve"])
         color = PALETTE[i % len(PALETTE)]
@@ -59,8 +59,13 @@ def _confusion_svg(m: dict[str, dict[str, int]]) -> str:
     return "".join(parts)
 
 
-def to_html(r: dict[str, Any]) -> str:
+PT = {'Who routes best — and how sure is it?': 'Quem roteia melhor — e com quanta certeza?', 'held-out requests': 'pedidos de teste', 'train': 'treino', 'split': 'divisão', 'by template (no paraphrase leakage)': 'por template (sem vazamento de paráfrases)', 'Best by macro-F1:': 'Melhor por macro-F1:', 'leaderboard': 'classificação', 'arm': 'braço', 'accuracy [95% CI]': 'acurácia [IC 95%]', 'OOS recall': 'recall fora de escopo', 'OOS false-accept': 'falso aceite fora de escopo', 'latency p50/p95 ms': 'latência p50/p95 ms', 'cost / 1k': 'custo / mil', 'escalated': 'escalado', 'coverage vs accuracy — pick the cascade threshold here': 'cobertura × acurácia — escolha aqui o limiar da cascata', 'confusion': 'confusão', 'is the difference real? exact McNemar vs': 'a diferença é real? McNemar exato vs', 'only best right': 'só o melhor acertou', 'only this right': 'só este acertou', 'p-value': 'p-valor', 'where the best arm fails': 'onde o melhor braço erra', 'request': 'pedido', 'truth': 'verdade', 'predicted': 'previsto', 'conf': 'conf.', 'coverage →': 'cobertura →', 'scorecard': 'placar', 'LLM arms not run: set': 'Braços com LLM não rodaram: defina', 'and': 'e', 'to include them. No LLM numbers are ever written by hand into this report.': 'para incluí-los. Nenhum número de LLM é escrito à mão neste relatório.'}
+
+
+def to_html(r: dict[str, Any], lang: str = "en") -> str:
     e = html.escape
+    tr = (lambda s: PT.get(s, s)) if lang == "pt" else (lambda s: s)
+    other = '<a class=mono href="scorecard.html">EN</a> · <b class=a>PT</b>' if lang == "pt" else '<b class=a>EN</b> · <a class=mono href="scorecard.pt.html">PT</a>'
     lb = r["leaderboard"]
     best = next(x for x in lb if x["arm"] == r["best"])
     rows = "".join(
@@ -75,22 +80,22 @@ def to_html(r: dict[str, Any]) -> str:
     errs = "".join(f"<tr><td>{e(x['text'])}</td><td class=mono>{x['truth']}</td><td class='mono d'>{x['predicted']}</td>"
                    f"<td class=mono>{x['confidence']}</td></tr>" for x in r["best_errors"][:15])
     llm_note = ("" if r["llm_included"] else
-                "<p class=muted>LLM arms not run: set <span class=mono>LLM_API_KEY</span> and <span class=mono>LAB_LLM_MODEL</span> "
-                "to include them. No LLM numbers are ever written by hand into this report.</p>")
-    return f"""<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+                f"<p class=muted>{tr('LLM arms not run: set')} <span class=mono>LLM_API_KEY</span> {tr('and')} <span class=mono>LAB_LLM_MODEL</span> "
+                f"{tr('to include them. No LLM numbers are ever written by hand into this report.')}</p>")
+    return f"""<!doctype html><html lang={"pt-BR" if lang == "pt" else "en"}><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>Routing benchmark</title><style>{CSS}</style></head><body><main>
-<div class=label>llm-routing-eval-lab · scorecard</div><h1>Who routes best — and how sure is it?</h1>
-<p class=muted>{r['test_size']} held-out requests ({r['train_size']} train), split {e(r['split'])}. Best by macro-F1:
+<div class=label style="display:flex;justify-content:space-between">llm-routing-eval-lab · {tr('scorecard')}<span>{other}</span></div><h1>{tr('Who routes best — and how sure is it?')}</h1>
+<p class=muted>{r['test_size']} {tr('held-out requests')} ({r['train_size']} {tr('train')}), {tr('split')} {e(tr(r['split']))}. {tr('Best by macro-F1:')}
 <span class='mono a'>{e(r['best'])}</span>.</p>{llm_note}
-<section class=card><div class=label>leaderboard</div><table><tr><th>arm</th><th>accuracy [95% CI]</th><th>macro-F1</th>
-<th>OOS recall</th><th>OOS false-accept</th><th>ECE</th><th>latency p50/p95 ms</th><th>cost / 1k</th><th>escalated</th></tr>{rows}</table></section>
+<section class=card><div class=label>{tr('leaderboard')}</div><table><tr><th>{tr('arm')}</th><th>{tr('accuracy [95% CI]')}</th><th>macro-F1</th>
+<th>{tr('OOS recall')}</th><th>{tr('OOS false-accept')}</th><th>ECE</th><th>{tr('latency p50/p95 ms')}</th><th>{tr('cost / 1k')}</th><th>{tr('escalated')}</th></tr>{rows}</table></section>
 <div class=grid>
-<section class=card><div class=label>coverage vs accuracy — pick the cascade threshold here</div>{_curve_svg(lb)}</section>
-<section class=card><div class=label>confusion — {e(best['arm'])}</div>{_confusion_svg(best['confusion'])}</section>
+<section class=card><div class=label>{tr('coverage vs accuracy — pick the cascade threshold here')}</div>{_curve_svg(lb, tr)}</section>
+<section class=card><div class=label>{tr('confusion')} — {e(best['arm'])}</div>{_confusion_svg(best['confusion'])}</section>
 </div>
-<section class=card><div class=label>is the difference real? exact McNemar vs {e(r['best'])}</div><table>
-<tr><th>arm</th><th>only best right</th><th>only this right</th><th>p-value</th></tr>{sig}</table></section>
-<section class=card><div class=label>where the best arm fails</div><table><tr><th>request</th><th>truth</th><th>predicted</th><th>conf</th></tr>{errs}</table></section>
+<section class=card><div class=label>{tr('is the difference real? exact McNemar vs')} {e(r['best'])}</div><table>
+<tr><th>{tr('arm')}</th><th>{tr('only best right')}</th><th>{tr('only this right')}</th><th>{tr('p-value')}</th></tr>{sig}</table></section>
+<section class=card><div class=label>{tr('where the best arm fails')}</div><table><tr><th>{tr('request')}</th><th>{tr('truth')}</th><th>{tr('predicted')}</th><th>{tr('conf')}</th></tr>{errs}</table></section>
 </main></body></html>"""
 
 
