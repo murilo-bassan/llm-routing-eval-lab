@@ -1,84 +1,71 @@
-<div align="center">
-
-# routebench · llm-routing-eval-lab
-
-**Which router should send a request to which tool — and when is an LLM worth paying for?**
-A benchmark harness that reports what accuracy hides: out-of-scope false-accepts, calibration,
-confidence intervals, statistical significance and the cascade threshold.
-
-![python](https://img.shields.io/badge/python-3.11%2B-000?style=flat-square&labelColor=000&color=c6ff00)
-![stats](https://img.shields.io/badge/McNemar%20%C2%B7%20bootstrap%20%C2%B7%20ECE-000?style=flat-square&labelColor=000&color=a58bff)
-![tests](https://img.shields.io/badge/tests-14%20%2B%20CI%20gate-000?style=flat-square&labelColor=000&color=c6ff00)
+# routebench
 
 **English** · [Português](README.pt-BR.md)
 
-<img src="docs/screenshots/scorecard-top.png" alt="scorecard" width="100%">
+Compares ways to decide which tool should handle a request, from a keyword list
+to an LLM, and shows which one is worth what it costs.
 
-</div>
-
----
+![routebench](docs/screenshots/scorecard-top.png)
 
 ## The question
 
-Every tool-using assistant routes first: *which tool does this request need — or none?*
-Teams usually pick between hand-written keywords, a small classifier and an LLM call by
-gut feeling. This lab makes it a measured decision, with the methodology a reviewer
-would ask for ([ADR 0001](docs/adr/0001-how-to-compare-routers.md)).
+Every assistant that uses tools starts by deciding: *which tool does this request need, if any?*
+Usually that choice is made on gut feeling. Here it's measured.
 
-## Arms
+## Methods compared
 
-| arm | how | cost |
+| method | how it works | cost |
 |---|---|---|
-| `keywords` | hand-written keyword lists — what most systems start with | free |
-| `fuzzy-nn` | difflib nearest training request — the `mcp-tool-gateway` baseline | free |
-| `naive-bayes` | multinomial NB over words + char 4-grams (typo-tolerant) | free |
-| `embed-knn` | cosine kNN over hashed char-n-gram embeddings, similarity-gated out-of-scope | free |
-| `cascade(a→b@τ)` | cheap arm answers when confident ≥ τ, otherwise escalates | mixed |
-| `llm:<model>` | any OpenAI-compatible model, JSON mode, few-shot, **disk-cached** | per token |
+| `keywords` | hand-written keyword lists | free |
+| `fuzzy-nn` | finds the most similar example | free |
+| `naive-bayes` | simple classifier trained on examples | free |
+| `embed-knn` | compares by vector similarity | free |
+| `cascade` | uses the cheap one and only calls the expensive one when unsure | mixed |
+| `llm` | any OpenAI-compatible model | per token |
 
-## Results (offline arms, held-out templates — `python -m lab.cli`)
+## Results
 
-| arm | accuracy [95% CI] | macro-F1 | OOS false-accept | ECE | escalated |
-|---|---|---|---|---|---|
-| **cascade(keywords→embed-knn@0.75)** | **0.815** [0.73–0.89] | **0.802** | 0.00 | 0.133 | 32% |
-| keywords | 0.759 [0.68–0.84] | 0.730 | 0.00 | 0.079 | — |
-| fuzzy-nn | 0.694 [0.61–0.78] | 0.654 | **0.85** | 0.128 | — |
-| naive-bayes | 0.620 [0.53–0.71] | 0.585 | **1.00** | 0.212 | — |
-| embed-knn | 0.593 [0.50–0.69] | 0.598 | 0.00 | 0.220 | — |
+| method | accuracy | out-of-scope requests wrongly accepted | sent to 2nd method |
+|---|---|---|---|
+| **cascade (keywords → embed-knn)** | **81.5%** | 0% | 32% |
+| keywords | 75.9% | 0% | — |
+| fuzzy-nn | 69.4% | **85%** | — |
+| naive-bayes | 62.0% | **100%** | — |
+| embed-knn | 59.3% | 0% | — |
 
-What the scorecard says that a single accuracy number would not:
-- The cascade beats each of its parts, sending only a third of traffic to the second arm.
-- Its lead over plain keywords is **not statistically significant** on 108 items
-  (McNemar p = 0.18) — more labeled data is needed before claiming it.
-- Two learned arms route **85–100% of out-of-scope requests to real actions**; on accuracy
-  alone they look merely "a bit worse".
-- With a key configured, the same run adds `llm:<model>` and `cascade(keywords→llm)`, with
-  cost per 1k requests — the numbers that decide whether the LLM earns its price.
+What accuracy alone doesn't show:
 
-> **No LLM result in this repository was typed by hand.** LLM arms run only when
-> `LLM_API_KEY` is in your environment (or a CI secret); their responses are cached by
-> prompt hash so analyses are reproducible.
+- The cascade beats each method on its own and only passes on a third of the requests.
+- But its lead over keywords **might be luck**: with 108 examples the statistical test doesn't confirm it (p = 0.18). It would need more data.
+- Two methods look only "a bit worse", yet they act on **85% to 100%** of the requests they should refuse.
 
-## Methodology highlights
-- **Template-level split** — no paraphrase leakage into the test set.
-- **Out-of-scope as a class**, with false-accept rate reported separately.
-- **Exact McNemar test** vs the best arm; **bootstrap 95% CIs**; **ECE** calibration.
-- **Coverage/accuracy curves** — where to set τ for a cascade.
-- **Regression gate**: `gates.json` floors per arm; `python -m lab.cli --gate` exits 1 on a breach (CI).
-- Self-contained **HTML scorecard** (inline SVG, no JS), in English and Portuguese, uploaded as a CI artifact.
+With an API key set, the LLM joins the same table, with its cost per thousand requests.
+No LLM number is typed in by hand: responses are cached, so results can be reproduced.
 
-## Quick start
+## How the comparison works
+
+- Test sentences are never rewordings of training sentences.
+- Out-of-scope requests are their own category, with a separate error rate.
+- Confidence intervals and McNemar's test, to tell when a difference is real.
+- Calibration: when a method says "90% sure", is it right 90% of the time?
+- CI fails if any method drops below the floor set in `gates.json`.
+
+Details in [`docs/adr/0001-how-to-compare-routers.md`](docs/adr/0001-how-to-compare-routers.md).
+
+## Running it
 
 ```bash
-git clone https://github.com/murilo-bassan/llm-routing-eval-lab.git && cd llm-routing-eval-lab
+git clone https://github.com/murilo-bassan/llm-routing-eval-lab.git
+cd llm-routing-eval-lab
 pip install -r requirements-dev.txt
 python -m pytest
-python -m lab.cli --gate          # → reports/scorecard.html and reports/scorecard.pt.html
-# with an LLM:  LLM_API_KEY=... LAB_LLM_MODEL=... LAB_PRICE_IN=... LAB_PRICE_OUT=... python -m lab.cli
+python -m lab.cli --gate      # writes reports/scorecard.html and reports/scorecard.pt.html
 ```
 
-<img src="docs/screenshots/scorecard.png" alt="full scorecard" width="100%">
+With an LLM: `LLM_API_KEY=... LAB_LLM_MODEL=... LAB_PRICE_IN=... LAB_PRICE_OUT=... python -m lab.cli`
 
----
+![full report](docs/screenshots/scorecard.png)
 
-<sub>Part of an AI engineering portfolio — see [ai-engineering-portfolio](https://github.com/murilo-bassan/ai-engineering-portfolio). Dataset is synthetic. MIT licensed.</sub>
+**Stack:** Python, NumPy
+
+The dataset is made up. MIT license.

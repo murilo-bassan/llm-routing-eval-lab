@@ -1,84 +1,71 @@
-<div align="center">
-
-# routebench · llm-routing-eval-lab
-
-**Qual roteador deve mandar cada pedido para cada tool, e quando vale a pena pagar por um LLM?**
-Um benchmark que mostra o que a acurácia esconde: falsos aceites fora de escopo, calibração,
-intervalos de confiança, significância estatística e o limiar da cascata.
-
-![python](https://img.shields.io/badge/python-3.11%2B-000?style=flat-square&labelColor=000&color=c6ff00)
-![stats](https://img.shields.io/badge/McNemar%20%C2%B7%20bootstrap%20%C2%B7%20ECE-000?style=flat-square&labelColor=000&color=a58bff)
-![testes](https://img.shields.io/badge/testes-14%20%2B%20port%C3%A3o%20no%20CI-000?style=flat-square&labelColor=000&color=c6ff00)
+# routebench
 
 [English](README.md) · **Português**
 
-<img src="docs/screenshots/scorecard-top.png" alt="scorecard" width="100%">
+Compara formas de decidir qual ferramenta deve atender um pedido, de uma lista de palavras-chave
+até um LLM, e mostra qual vale o que custa.
 
-</div>
-
----
+![routebench](docs/screenshots/scorecard-top.png)
 
 ## A pergunta
 
-Todo assistente que usa tools começa roteando: *qual tool este pedido precisa, ou nenhuma?*
-As equipes costumam escolher no feeling entre palavras-chave escritas à mão, um classificador
-leve e uma chamada de LLM. Este laboratório transforma isso numa decisão medida, com a
-metodologia que um revisor pediria ([ADR 0001](docs/adr/0001-how-to-compare-routers.md), em inglês).
+Todo assistente que usa ferramentas começa decidindo: *este pedido precisa de qual ferramenta, ou de nenhuma?*
+Normalmente isso é escolhido no feeling. Aqui a escolha é medida.
 
-## Braços
+## Os métodos comparados
 
-| braço | como | custo |
+| método | como funciona | custo |
 |---|---|---|
-| `keywords` | listas de palavras-chave escritas à mão: por onde a maioria dos sistemas começa | grátis |
-| `fuzzy-nn` | pedido de treino mais próximo via difflib: o baseline do `mcp-tool-gateway` | grátis |
-| `naive-bayes` | Naive Bayes multinomial sobre palavras + 4-gramas de caracteres (tolera erro de digitação) | grátis |
-| `embed-knn` | kNN por cosseno sobre embeddings de n-gramas com hash, com limiar de similaridade para fora de escopo | grátis |
-| `cascade(a→b@τ)` | o braço barato responde quando a confiança é ≥ τ; senão, escala | misto |
-| `llm:<modelo>` | qualquer modelo compatível com OpenAI, modo JSON, few-shot, **cache em disco** | por token |
+| `keywords` | listas de palavras-chave escritas à mão | grátis |
+| `fuzzy-nn` | procura o exemplo mais parecido | grátis |
+| `naive-bayes` | classificador simples treinado com exemplos | grátis |
+| `embed-knn` | compara por similaridade de vetores | grátis |
+| `cascade` | usa o barato e só chama o caro quando o barato não tem certeza | misto |
+| `llm` | qualquer modelo compatível com a API da OpenAI | por token |
 
-## Resultados (braços offline, templates separados para teste — `python -m lab.cli`)
+## Resultados
 
-| braço | acurácia [IC 95%] | macro-F1 | falso aceite fora de escopo | ECE | escalado |
-|---|---|---|---|---|---|
-| **cascade(keywords→embed-knn@0.75)** | **0,815** [0,73–0,89] | **0,802** | 0,00 | 0,133 | 32% |
-| keywords | 0,759 [0,68–0,84] | 0,730 | 0,00 | 0,079 | — |
-| fuzzy-nn | 0,694 [0,61–0,78] | 0,654 | **0,85** | 0,128 | — |
-| naive-bayes | 0,620 [0,53–0,71] | 0,585 | **1,00** | 0,212 | — |
-| embed-knn | 0,593 [0,50–0,69] | 0,598 | 0,00 | 0,220 | — |
+| método | acurácia | pedidos fora de escopo aceitos por engano | casos enviados ao 2º método |
+|---|---|---|---|
+| **cascade (keywords → embed-knn)** | **81,5%** | 0% | 32% |
+| keywords | 75,9% | 0% | — |
+| fuzzy-nn | 69,4% | **85%** | — |
+| naive-bayes | 62,0% | **100%** | — |
+| embed-knn | 59,3% | 0% | — |
 
-O que o scorecard mostra e um único número de acurácia não mostraria:
-- A cascata vence cada uma das suas partes, mandando só um terço do tráfego para o segundo braço.
-- A vantagem dela sobre as palavras-chave puras **não é estatisticamente significativa** com 108
-  itens (McNemar p = 0,18): é preciso mais dados rotulados antes de afirmar isso.
-- Dois braços aprendidos mandam **85–100% dos pedidos fora de escopo para ações reais**; olhando só a
-  acurácia, parecem apenas "um pouco piores".
-- Com uma chave configurada, a mesma execução acrescenta `llm:<modelo>` e `cascade(keywords→llm)`,
-  com custo por mil pedidos: os números que decidem se o LLM vale o preço.
+O que a acurácia sozinha não mostra:
 
-> **Nenhum resultado de LLM neste repositório foi digitado à mão.** Os braços com LLM só rodam
-> quando `LLM_API_KEY` está no seu ambiente (ou num secret do CI); as respostas ficam em cache
-> pelo hash do prompt, então as análises são reproduzíveis.
+- A cascata ganha de cada método isolado e só repassa um terço dos pedidos.
+- Mas a vantagem dela sobre as palavras-chave **pode ser sorte**: com 108 exemplos o teste estatístico não confirma (p = 0,18). Precisaria de mais dados.
+- Dois métodos parecem só "um pouco piores", mas executam uma ação em **85% a 100%** dos pedidos que deveriam recusar.
 
-## Destaques da metodologia
-- **Split por template**: nenhuma paráfrase vaza para o conjunto de teste.
-- **Fora de escopo como classe**, com a taxa de falso aceite reportada à parte.
-- **Teste exato de McNemar** contra o melhor braço; **IC 95% por bootstrap**; calibração por **ECE**.
-- **Curvas de cobertura × acurácia**: onde colocar o τ de uma cascata.
-- **Portão de regressão**: `gates.json` define pisos por braço; `python -m lab.cli --gate` sai com 1 se algum for violado (CI).
-- **Scorecard HTML** independente (SVG inline, sem JS), em inglês e em português, enviado como artefato do CI.
+Com uma chave de API configurada, o LLM entra na mesma tabela, com o custo por mil pedidos.
+Nenhum número de LLM é digitado à mão: as respostas ficam em cache, então o resultado pode ser refeito.
 
-## Como rodar
+## Como a comparação é feita
+
+- Frases de teste nunca são variações das frases de treino.
+- Pedidos fora de escopo são uma categoria própria, com taxa de erro separada.
+- Intervalos de confiança e teste de McNemar, para saber quando a diferença é real.
+- Calibração: quando o método diz "tenho 90% de certeza", acerta 90% das vezes?
+- O CI falha se algum método cair abaixo do mínimo definido em `gates.json`.
+
+Detalhes em [`docs/adr/0001-how-to-compare-routers.md`](docs/adr/0001-how-to-compare-routers.md) (em inglês).
+
+## Rodando
 
 ```bash
-git clone https://github.com/murilo-bassan/llm-routing-eval-lab.git && cd llm-routing-eval-lab
+git clone https://github.com/murilo-bassan/llm-routing-eval-lab.git
+cd llm-routing-eval-lab
 pip install -r requirements-dev.txt
 python -m pytest
-python -m lab.cli --gate          # → reports/scorecard.html e reports/scorecard.pt.html
-# com um LLM:  LLM_API_KEY=... LAB_LLM_MODEL=... LAB_PRICE_IN=... LAB_PRICE_OUT=... python -m lab.cli
+python -m lab.cli --gate      # gera reports/scorecard.html e reports/scorecard.pt.html
 ```
 
-<img src="docs/screenshots/scorecard.png" alt="scorecard completo" width="100%">
+Com um LLM: `LLM_API_KEY=... LAB_LLM_MODEL=... LAB_PRICE_IN=... LAB_PRICE_OUT=... python -m lab.cli`
 
----
+![relatório completo](docs/screenshots/scorecard.png)
 
-<sub>Parte de um portfólio de engenharia de IA: veja [ai-engineering-portfolio](https://github.com/murilo-bassan/ai-engineering-portfolio). O dataset é sintético. Licença MIT.</sub>
+**Stack:** Python, NumPy
+
+O conjunto de dados é fictício. Licença MIT.
