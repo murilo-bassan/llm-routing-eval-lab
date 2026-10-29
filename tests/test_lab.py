@@ -141,7 +141,7 @@ def test_cli_writes_report_and_gates(tmp_path):
     assert code == 0
     html = (tmp_path / "r.html").read_text(encoding="utf-8")
     assert "<svg" in html and "McNemar" in html and "<script" not in html
-    assert "LLM arms not run" in html          # no LLM numbers without a real run
+    assert "The LLM was not tested" in html    # no LLM numbers without a real run
     pt = (tmp_path / "r.pt.html").read_text(encoding="utf-8")
-    assert "Quem roteia melhor" in pt and "Braços com LLM não rodaram" in pt and 'href="scorecard.html"' in pt
+    assert "Qual método escolhe a ferramenta certa?" in pt and "O LLM não foi testado" in pt and 'href="scorecard.html"' in pt
     assert report.to_markdown(json.loads((tmp_path / "r.json").read_text(encoding="utf-8"))).startswith("Held-out")
